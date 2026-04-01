@@ -5,18 +5,19 @@ import az.edu.ada.wm2.lab6.model.Product;
 import az.edu.ada.wm2.lab6.model.dto.CategoryRequestDto;
 import az.edu.ada.wm2.lab6.model.dto.CategoryResponseDto;
 import az.edu.ada.wm2.lab6.model.dto.ProductResponseDto;
-import az.edu.ada.wm2.lab6.model.mapper.CategoryMapper;
 import az.edu.ada.wm2.lab6.model.mapper.ProductMapper;
+import az.edu.ada.wm2.lab6.model.mapper.CategoryMapper;
 import az.edu.ada.wm2.lab6.repository.CategoryRepository;
 import az.edu.ada.wm2.lab6.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Service
-public class CategoryServiceImpl implements CategoryService{
+public class CategoryServiceImpl implements CategoryService {
     private final CategoryRepository categoryRepository;
     private final ProductMapper productMapper;
     private final ProductRepository productRepository;
@@ -32,45 +33,49 @@ public class CategoryServiceImpl implements CategoryService{
     public CategoryResponseDto create(CategoryRequestDto dto) {
         Category category = CategoryMapper.toEntity(dto);
 
-        Category savedCatagory = categoryRepository.save(category);
+        if (category.getProducts() == null) category.setProducts(new ArrayList<>());
 
-        return CategoryMapper.toResponseDto(savedCatagory);
+        Category savedCategory = categoryRepository.save(category);
+        return CategoryMapper.toResponseDto(savedCategory);
     }
 
     @Override
     public List<CategoryResponseDto> getAll() {
         List<Category> categories = categoryRepository.findAll();
-
-        return categories.stream().map(CategoryMapper::toResponseDto).toList();
+        return categories.stream()
+                .map(CategoryMapper::toResponseDto)
+                .toList();
     }
 
     @Override
     public CategoryResponseDto addProduct(UUID categoryId, UUID productId) {
-        Category existingCategory = categoryRepository.findById(categoryId)
+        Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new RuntimeException("Category not found with id: " + categoryId));
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
 
-        if (!existingCategory.getProducts().contains(product)) {
-            existingCategory.getProducts().add(product);
-        }
+        // Null-safe lists
+        if (category.getProducts() == null) category.setProducts(new ArrayList<>());
+        if (product.getCategories() == null) product.setCategories(new ArrayList<>());
 
-        if (!product.getCategories().contains(existingCategory)) {
-            product.getCategories().add(existingCategory);
-        }
-        Category savedCategory = categoryRepository.save(existingCategory);
+        if (!category.getProducts().contains(product)) category.getProducts().add(product);
+        if (!product.getCategories().contains(category)) product.getCategories().add(category);
 
-        return CategoryMapper.toResponseDto(savedCategory);
+        categoryRepository.save(category);
+        return CategoryMapper.toResponseDto(category);
     }
 
     @Override
     public List<ProductResponseDto> getProducts(UUID categoryId) {
-        Category existingCategory = categoryRepository.findById(categoryId)
+        Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new RuntimeException("Category not found with id: " + categoryId));
 
-        List<Product> products = existingCategory.getProducts();
+        List<Product> products = category.getProducts();
+        if (products == null) products = new ArrayList<>();
 
-        return products.stream().map(productMapper::toResponseDto).toList();
+        return products.stream()
+                .map(productMapper::toResponseDto)
+                .toList();
     }
 }

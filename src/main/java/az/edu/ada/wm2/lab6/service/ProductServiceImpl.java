@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -26,64 +27,75 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public ProductResponseDto createProduct(ProductRequestDto product) {
-        Product productEntity = productMapper.toEntity(product);
-        Product savedProduct = productRepository.save(productEntity);
-        return productMapper.toResponseDto(savedProduct);
+    public ProductResponseDto createProduct(ProductRequestDto dto) {
+        validatePrice(dto.getPrice());
+
+        Product product = productMapper.toEntity(dto);
+        if (product.getCategories() == null) product.setCategories(new ArrayList<>());
+
+        Product saved = productRepository.save(product);
+        return productMapper.toResponseDto(saved);
     }
 
     @Override
     public ProductResponseDto getProductById(UUID id) {
-        Product productEntity = productRepository.findById(id)
+        Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
-        return productMapper.toResponseDto(productEntity);
+        return productMapper.toResponseDto(product);
     }
 
     @Override
     public List<ProductResponseDto> getAllProducts() {
         List<Product> products = productRepository.findAll();
-
         return products.stream()
                 .map(productMapper::toResponseDto)
                 .toList();
     }
 
     @Override
-    public ProductResponseDto updateProduct(UUID id, ProductRequestDto product) {
-        Product existingProduct = productRepository.findById(id)
+    public ProductResponseDto updateProduct(UUID id, ProductRequestDto dto) {
+        validatePrice(dto.getPrice());
+
+        Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
 
-        Product updatedProduct = productMapper.toEntity(product);
-        updatedProduct.setId(id);
-        Product savedProduct = productRepository.save(updatedProduct);
-        return productMapper.toResponseDto(savedProduct);
+        Product updated = productMapper.toEntity(dto);
+        updated.setId(id);
+
+        if (updated.getCategories() == null) updated.setCategories(new ArrayList<>());
+
+        Product saved = productRepository.save(updated);
+        return productMapper.toResponseDto(saved);
     }
 
     @Override
     public void deleteProduct(UUID id) {
-        if (!productRepository.existsById(id)) {
-            throw new RuntimeException("Product not found with id: " + id);
-        }
-        productRepository.deleteById(id);
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
+        productRepository.delete(product);
     }
 
     @Override
     public List<ProductResponseDto> getProductsExpiringBefore(LocalDate date) {
         List<Product> products = productRepository.findAll().stream()
-                .filter(product -> product.getExpirationDate() != null && 
-                        product.getExpirationDate().isBefore(date))
+                .filter(p -> p.getExpirationDate() != null && p.getExpirationDate().isBefore(date))
                 .collect(Collectors.toList());
-
-        return  products.stream().map(productMapper::toResponseDto).toList();
+        return products.stream().map(productMapper::toResponseDto).toList();
     }
 
     @Override
     public List<ProductResponseDto> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
         List<Product> products = productRepository.findAll().stream()
-                .filter(product -> product.getPrice().compareTo(minPrice) >= 0 && 
-                        product.getPrice().compareTo(maxPrice) <= 0)
+                .filter(p -> p.getPrice() != null &&
+                        p.getPrice().compareTo(minPrice) >= 0 &&
+                        p.getPrice().compareTo(maxPrice) <= 0)
                 .collect(Collectors.toList());
-
         return products.stream().map(productMapper::toResponseDto).toList();
+    }
+
+    private void validatePrice(BigDecimal price) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Price must be positive");
+        }
     }
 }
