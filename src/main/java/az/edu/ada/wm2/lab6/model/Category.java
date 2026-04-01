@@ -2,17 +2,17 @@ package az.edu.ada.wm2.lab6.model;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Entity
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Category {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -21,5 +21,6 @@ public class Category {
     private String name;
 
     @ManyToMany(mappedBy = "categories")
-    private Set<Product> products = new HashSet<>();
+    @Builder.Default
+    private List<Product> products = new ArrayList<>();
 }
