@@ -8,6 +8,7 @@ import az.edu.ada.wm2.lab6.model.dto.ProductResponseDto;
 import az.edu.ada.wm2.lab6.model.mapper.CategoryMapper;
 import az.edu.ada.wm2.lab6.model.mapper.ProductMapper;
 import az.edu.ada.wm2.lab6.repository.CategoryRepository;
+import az.edu.ada.wm2.lab6.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -18,11 +19,13 @@ import java.util.UUID;
 public class CategoryServiceImpl implements CategoryService{
     private final CategoryRepository categoryRepository;
     private final ProductMapper productMapper;
+    private final ProductRepository productRepository;
 
     @Autowired
-    public CategoryServiceImpl(CategoryRepository categoryRepository, ProductMapper productMapper) {
+    public CategoryServiceImpl(CategoryRepository categoryRepository, ProductMapper productMapper, ProductRepository productRepository) {
         this.categoryRepository = categoryRepository;
         this.productMapper = productMapper;
+        this.productRepository = productRepository;
     }
 
     @Override
@@ -46,8 +49,16 @@ public class CategoryServiceImpl implements CategoryService{
         Category existingCategory = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new RuntimeException("Category not found with id: " + categoryId));
 
-        existingCategory.setId(categoryId);
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
 
+        if (!existingCategory.getProducts().contains(product)) {
+            existingCategory.getProducts().add(product);
+        }
+
+        if (!product.getCategories().contains(existingCategory)) {
+            product.getCategories().add(existingCategory);
+        }
         Category savedCategory = categoryRepository.save(existingCategory);
 
         return CategoryMapper.toResponseDto(savedCategory);
