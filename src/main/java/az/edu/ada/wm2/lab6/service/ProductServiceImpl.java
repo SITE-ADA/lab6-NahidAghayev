@@ -1,9 +1,11 @@
 package az.edu.ada.wm2.lab6.service;
 
+import az.edu.ada.wm2.lab6.model.Category;
 import az.edu.ada.wm2.lab6.model.Product;
 import az.edu.ada.wm2.lab6.model.dto.ProductRequestDto;
 import az.edu.ada.wm2.lab6.model.dto.ProductResponseDto;
 import az.edu.ada.wm2.lab6.model.mapper.ProductMapper;
+import az.edu.ada.wm2.lab6.repository.CategoryRepository;
 import az.edu.ada.wm2.lab6.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -19,11 +21,13 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final ProductMapper productMapper;
+    private final CategoryRepository categoryRepository;
 
     @Autowired
-    public ProductServiceImpl(ProductRepository productRepository, ProductMapper productMapper) {
+    public ProductServiceImpl(ProductRepository productRepository, ProductMapper productMapper, CategoryRepository categoryRepository) {
         this.productRepository = productRepository;
         this.productMapper = productMapper;
+        this.categoryRepository = categoryRepository;
     }
 
     @Override
@@ -31,7 +35,22 @@ public class ProductServiceImpl implements ProductService {
         validatePrice(dto.getPrice());
 
         Product product = productMapper.toEntity(dto);
-        if (product.getCategories() == null) product.setCategories(new ArrayList<>());
+
+        if (dto.getCategoryIds() != null && !dto.getCategoryIds().isEmpty()) {
+            List<Category> categories = categoryRepository.findAllById(dto.getCategoryIds());
+
+            product.setCategories(categories);
+
+            for (Category category : categories) {
+                if (category.getProducts() == null) {
+                    category.setProducts(new ArrayList<>());
+                }
+                category.getProducts().add(product);
+            }
+
+        } else {
+            product.setCategories(new ArrayList<>());
+        }
 
         Product saved = productRepository.save(product);
         return productMapper.toResponseDto(saved);
@@ -59,12 +78,11 @@ public class ProductServiceImpl implements ProductService {
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
 
-        Product updated = productMapper.toEntity(dto);
-        updated.setId(id);
+        existing.setProductName(dto.getProductName());
+        existing.setPrice(dto.getPrice());
+        existing.setExpirationDate(dto.getExpirationDate());
 
-        if (updated.getCategories() == null) updated.setCategories(new ArrayList<>());
-
-        Product saved = productRepository.save(updated);
+        Product saved = productRepository.save(existing);
         return productMapper.toResponseDto(saved);
     }
 
@@ -77,20 +95,18 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<ProductResponseDto> getProductsExpiringBefore(LocalDate date) {
-        List<Product> products = productRepository.findAll().stream()
-                .filter(p -> p.getExpirationDate() != null && p.getExpirationDate().isBefore(date))
-                .collect(Collectors.toList());
-        return products.stream().map(productMapper::toResponseDto).toList();
+        return productRepository.findByExpirationDateBefore(date)
+                .stream()
+                .map(productMapper::toResponseDto)
+                .toList();
     }
 
     @Override
     public List<ProductResponseDto> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-        List<Product> products = productRepository.findAll().stream()
-                .filter(p -> p.getPrice() != null &&
-                        p.getPrice().compareTo(minPrice) >= 0 &&
-                        p.getPrice().compareTo(maxPrice) <= 0)
-                .collect(Collectors.toList());
-        return products.stream().map(productMapper::toResponseDto).toList();
+        return productRepository.findByPriceBetween(minPrice, maxPrice)
+                .stream()
+                .map(productMapper::toResponseDto)
+                .toList();
     }
 
     private void validatePrice(BigDecimal price) {
